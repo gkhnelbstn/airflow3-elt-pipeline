@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AIRFLOW_VERSION: "3.4.0"
+  PYTHON_VERSION: "3.13"  # the Python of the apache/airflow:3.4.0 image
+
+jobs:
+  # Fast: lint, unit tests and DAG integrity, no database, no Docker.
+  lint-and-dag-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: .github/workflows/ci.yml
+      - name: Install Airflow (official constraints) and tools
+        run: |
+          uv venv
+          uv pip install "apache-airflow[postgres]==${AIRFLOW_VERSION}" pytest==8.4.2 ruff==0.14.5 \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
+      - name: Lint
+        run: |
+          uv run --no-sync ruff check
+          uv run --no-sync ruff format --check
+      - name: Unit tests and DAG integrity
+        run: uv run --no-sync pytest -v -W ignore::DeprecationWarning
+
+  # Slower: the real stack in Docker Compose, a real TLC sample, and a corrupted
+  # month that the quality gate must block.
+  end-to-end:
+    needs: lint-and-dag-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: airflow3-elt:local
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Configure
+        run: |
+          sed -e "s/^AIRFLOW_JWT_SECRET=.*/AIRFLOW_JWT_SECRET=$(openssl rand -hex 16)/" \
+              -e "s/^WAREHOUSE_PASSWORD=.*/WAREHOUSE_PASSWORD=$(openssl rand -hex 12)/" \
+              -e "s/^AIRFLOW_UID=.*/AIRFLOW_UID=$(id -u)/" .env.example > .env
+          mkdir -p faults/www
+      - name: Start the stack
+        run: docker compose up -d --wait --no-build
+      - name: Good month passes, corrupted month is blocked
+        run: scripts/e2e.sh 2026-08 2026-07
+      - name: Logs on failure
+        if: failure()
+        run: |
+          docker compose ps -a
+          docker compose logs --tail 200 airflow-scheduler airflow-dag-processor
+          docker compose exec -T airflow-scheduler bash -c 'tail -n 40 /opt/airflow/logs/dag_id=*/run_id=*/task_id=*/attempt=*.log' || true

@@ -1,0 +1,8 @@
+.env
+logs/
+faults/www/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.parquet
