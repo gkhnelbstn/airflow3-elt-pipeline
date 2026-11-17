@@ -1,13 +1,15 @@
 # Airflow 3 plus the warehouse it orchestrates.
 #
 # The warehouse (the `tlc-ingest` loader and the dbt project) comes from
-# https://github.com/gkhnelbstn/dbt-postgres-warehouse-demo at a pinned commit and
+# https://github.com/gkhnelbstn/dbt-postgres-warehouse-demo at a pinned release and
 # is installed into its own virtualenv, so dbt's dependencies never meet Airflow's.
 # DAGs call it as /opt/warehouse-venv/bin/{tlc-ingest,dbt}.
 FROM apache/airflow:3.4.0
 
 ARG WAREHOUSE_REPO=gkhnelbstn/dbt-postgres-warehouse-demo
-ARG WAREHOUSE_REF=e20fe34cc56c3dc70a76f9c98783517485000d77
+# A release tag of the warehouse repo (v1.0.0 is commit 6c1e305). Any tag, branch
+# or commit SHA works: docker compose build --build-arg WAREHOUSE_REF=<ref>
+ARG WAREHOUSE_REF=v1.0.0
 
 USER root
 # Group 0 and group-writable, like the base image, so any AIRFLOW_UID can write.
@@ -17,7 +19,7 @@ RUN mkdir -p /opt/warehouse /opt/warehouse-venv /opt/airflow/tlc-cache /opt/airf
     && chmod -R g+rwX /opt/warehouse /opt/airflow/tlc-cache /opt/airflow/dbt-target
 USER airflow
 
-# Source of the pinned commit (the repo is public; no git needed in the image).
+# Source at that ref (the repo is public; no git needed in the image).
 RUN python - <<EOF
 import io, tarfile, urllib.request
 url = "https://codeload.github.com/${WAREHOUSE_REPO}/tar.gz/${WAREHOUSE_REF}"

@@ -97,11 +97,13 @@ ALERT :red_circle: dbt_warehouse.quality_gate.check_file_quality failed (run ass
   yellow 2026-06: valid_pct 85.14 < 90.0
 ```
 
-**How the two repos connect.** The `Dockerfile` downloads the warehouse repo at a pinned commit
-(`WAREHOUSE_REF`) and installs `tlc-ingest`, `dbt-core` and `dbt-postgres` into
+**How the two repos connect.** The `Dockerfile` downloads the warehouse repo at a release tag
+(`WAREHOUSE_REF`, default
+[`v1.0.0`](https://github.com/gkhnelbstn/dbt-postgres-warehouse-demo/releases/tag/v1.0.0)) and installs `tlc-ingest`, `dbt-core` and `dbt-postgres` into
 `/opt/warehouse-venv`, apart from Airflow's own packages; `dbt deps` runs at build time. A pinned
 git dependency alone would not work: the warehouse's wheel does not include its dbt project. To
-move to a newer warehouse version, change `WAREHOUSE_REF` and rebuild.
+move to a newer warehouse version, change `WAREHOUSE_REF` (a tag, branch or commit SHA) and
+rebuild.
 
 ## Run it
 
