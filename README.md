@@ -44,14 +44,14 @@ flowchart LR
     end
     y -.->|raw.yellow_trips| dbt
     g -.->|raw.green_trips| dbt
-    subgraph dbt["dbt_warehouse (raw.yellow_trips AND raw.green_trips)"]
+    subgraph dbt["dbt_warehouse (both raw assets)"]
         core[dbt_run_core] --> t[quality_gate.dbt_test_core]
         core --> q[quality_gate.check_file_quality]
         t --> agg[dbt_build_aggregates]
         q --> agg
     end
     agg -.->|marts.aggregates| pub
-    subgraph pub["publish_marts (marts.aggregates)"]
+    subgraph pub["publish_marts"]
         r[record_publication]
     end
 ```
