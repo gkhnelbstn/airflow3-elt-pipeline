@@ -10,7 +10,8 @@ This repo adds what runs it: DAGs, scheduling, retries, alerting, backfills, the
 Docker Compose stack, and tests.
 
 **A run that passes the gate.** `dbt_warehouse` after a backfilled month: core models built,
-both gate checks passed, the aggregates built.
+both gate checks passed, the aggregates built. (The grid on the left also shows the later,
+blocked run.)
 
 ![dbt_warehouse run with every task green](docs/green-run.png)
 
@@ -60,7 +61,8 @@ earlier (TLC publishes with about that delay), or the month given in the `month`
 task calls the warehouse repo's `tlc-ingest` CLI, which skips a file whose published version
 (ETag) was already loaded, so retries and re-runs are safe. On success a task emits an event on
 its raw-table asset; the month, the outcome (`loaded` / `already_loaded`), the row counts and
-the file version go into the event's `extra`. Assets are fixed when a DAG is parsed, so there is
+the file version go into the event's `extra`, for example
+`{"dataset": "yellow", "month": "2026-07", "outcome": "loaded", "file_rows": 3530109, "raw_rows": 50000, ...}`. Assets are fixed when a DAG is parsed, so there is
 one per raw table, not one per month.
 
 **dbt.** `dbt_warehouse` is scheduled on `raw.yellow_trips & raw.green_trips`: one `tlc_ingest`
@@ -160,13 +162,14 @@ first 50,000, 6,250 of them damaged. Both gate checks failed:
 
 - `dbt_test_core`: `FAIL 6250 relationships_fct_trips_pickup_zone_id__zone_id__ref_dim_zone_`
   (PASS=44, ERROR=1);
-- `check_file_quality`: `yellow 2026-06: valid_pct 85.14 < 90.0` (the clean months are at
-  97.3 to 97.7% for yellow, 99.5 to 99.7% for green).
+- `check_file_quality`: `yellow 2026-06: valid_pct 85.14 < 90.0` (at that point the clean
+  yellow months were at 97.49 and 97.67%, the green months at 99.52 to 99.66%).
 
 **Recovery.** Trigger the month again from the real CDN
 (`--conf '{"month": "2026-06"}'`). The real file has a different version from the one the
 fake CDN served, so the loader replaces the month; `fct_trips` rebuilds it; the gate passes
-(`valid_pct` 97.31) and `publish_marts` runs. Done on the same stack, 2026-11-17.
+(`valid_pct` 97.31) and `publish_marts` runs. In Airflow's asset event history,
+`marts.aggregates` has one event per passed gate and none for the blocked run. Done on the same stack, 2026-11-17.
 
 ## Tests and CI
 
@@ -206,7 +209,7 @@ Desktop), on 2026-11-17, with the default 50,000-row sample:
 | `dbt_warehouse`, first run | 58 s |
 | `dbt_warehouse`, after the backfill | 44.5 s |
 | `dbt_warehouse`, blocked by the gate | 34.5 s |
-| `publish_marts` | 2 to 3 s |
+| `publish_marts` | 1.4 to 2.2 s |
 | Memory after these runs (`docker stats`) | scheduler 983 MiB, API server 313 MiB, DAG processor 230 MiB, PostgreSQL 242 MiB |
 | `warehouse` database, 3 sample months | 144 MB |
 
