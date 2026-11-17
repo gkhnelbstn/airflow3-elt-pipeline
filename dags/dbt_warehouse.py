@@ -84,7 +84,10 @@ def dbt_warehouse():
             from airflow.providers.postgres.hooks.postgres import PostgresHook
 
             rows = PostgresHook(postgres_conn_id=WAREHOUSE_CONN_ID).get_records(QUALITY_SQL)
-            log.info("file | file_rows | raw | fct | reconciled | valid_pct | bad_zone | bad_time")
+            log.info(
+                "file | file_rows | raw_rows | fct_rows | is_reconciled | valid_pct"
+                " | unknown_zone_rows (264/265) | non_positive_duration_rows"
+            )
             for r in rows:
                 log.info("%s %s | %s | %s | %s | %s | %s | %s | %s", *r)
             threshold = min_valid_pct()
